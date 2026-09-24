@@ -1,0 +1,20 @@
+[project]
+name = "crawl4ai-local"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "fix-a-lot", email = "35915923+fix-a-lot@users.noreply.github.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "crawl4ai>=0.9.4",
+    "mcp>=2.2.0",
+]
+
+[project.scripts]
+crawl4ai-local = "crawl4ai_local:main"
+
+[build-system]
+requires = ["uv_build>=0.12.17,<0.13.0"]
+build-backend = "uv_build"

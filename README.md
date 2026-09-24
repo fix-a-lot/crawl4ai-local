@@ -1,8 +1,8 @@
-# Crawl4ai Local for Windows
+# Crawl4ai Local
 
 [한국어](./README.ko.md) | [English](./README.md)
 
-Local MCP server for Crawl4ai on Windows. Runs directly on Windows without WSL.
+Local MCP server for Crawl4ai on Linux.
 
 🤖 Most of the code was generated with AI assistance.
 
@@ -14,12 +14,22 @@ See also:
 ## Requirements
 
 - [uv](https://docs.astral.sh/uv/)
-- Python 3.14 (Python installed via uv may be blocked by Windows Smart App Control, so install it separately)
+- Linux
+- Python 3.14 (installing via uv is fine: `uv python install 3.14`)
 
 ## Installation
 
 ```
 uv sync
+
+# Install Chromium for Playwright
+uv run crawl4ai-setup
+```
+
+If the browser fails to launch because system libraries required by Chromium are missing, install them with the command below (requires sudo; apt-based distros such as Debian/Ubuntu only).
+
+```
+uv run playwright install-deps chromium
 ```
 
 ## Running
@@ -35,7 +45,7 @@ uv run main
 
 ```
 # Tip: debugging mode (MCP Inspector)
-uv run mcp dev src/crawl4ai_local_for_windows/server.py
+uv run mcp dev src/crawl4ai_local/server.py
 ```
 
 ## Adding MCP to an Agent
@@ -43,11 +53,11 @@ uv run mcp dev src/crawl4ai_local_for_windows/server.py
 ### Claude Code
 
 ```
-claude mcp add --transport stdio --scope user crawl4ai -- uv run --directory <parent_location>/crawl4ai-local-for-windows main
+claude mcp add --transport stdio --scope user crawl4ai -- uv run --directory <parent_location>/crawl4ai-local main
 ```
 
-- `parent_location`: Write it like `C:/dev/repo`
-- e.g. `claude mcp add --transport stdio --scope user crawl4ai -- uv run --directory C:/dev/repo/crawl4ai-local-for-windows main`
+- `parent_location`: An absolute path like `/home/<user>/dev/repo` (use `~` only where the shell expands it)
+- e.g. `claude mcp add --transport stdio --scope user crawl4ai -- uv run --directory /home/me/dev/repo/crawl4ai-local main`
 
 ```
 # Check MCP installation
@@ -58,11 +68,11 @@ claude mcp get crawl4ai
 ### Hermes Agent
 
 ```
-hermes mcp add crawl4ai --command "uv" --args "run" "--directory" "<parent_location>/crawl4ai-local-for-windows" "main"
+hermes mcp add crawl4ai --command "uv" --args "run" "--directory" "<parent_location>/crawl4ai-local" "main"
 ```
 
-- `parent_location`: Write it like `C:/dev/repo`
-- e.g. `C:/dev/repo/crawl4ai-local-for-windows`
+- `parent_location`: An absolute path like `/home/<user>/dev/repo` (use `~` only where the shell expands it)
+- e.g. `/home/me/dev/repo/crawl4ai-local`
 
 ```
 # Check MCP installation
@@ -103,7 +113,14 @@ Both tools share the waiting options (see below).
 
 Capture a full-page screenshot and save it to a file. Parent directories are created automatically.
 
-🛡️ **`output_path` is checked against a blocklist of known Windows system directories** (`C:\Windows`, `C:\Program Files`, `C:\Program Files (x86)`, `C:\ProgramData`, `C:\System Volume Information`, `C:\$Recycle.Bin`, `C:\Users\All Users`, `C:\Users\Default`) before the crawl even runs. A path that resolves into one of these (including via `..` traversal) is rejected with an error message, so an agent can't accidentally overwrite system files. This is a blocklist, not a full sandbox — it guards against mistakes, not a determined attacker.
+💡 If `output_path` is a Windows path (`C:\Users\me\shot.png`, `D:/shots/a.png`), it is converted to the mounted drive path (`/mnt/c/Users/me/shot.png`) before saving.
+
+🛡️ **`output_path` is checked against a blocklist of known system directories before the crawl even runs.**
+
+- Linux: `/bin`, `/boot`, `/dev`, `/etc`, `/lib`, `/lib32`, `/lib64`, `/libx32`, `/proc`, `/run`, `/sbin`, `/snap`, `/sys`, `/usr`, `/var`
+- Windows (under `/mnt/<drive>/`, case-insensitive): `Windows`, `Program Files`, `Program Files (x86)`, `ProgramData`, `System Volume Information`, `$Recycle.Bin`, `Users/All Users`, `Users/Default`
+
+A path that resolves into one of these (including via `..` traversal or symlinks) is rejected with an error message, so an agent can't accidentally overwrite system files. This is a blocklist, not a full sandbox — it guards against mistakes, not a determined attacker. If Windows drives are mounted somewhere other than `/mnt/`, update `_DRIVE_MOUNT_ROOT` in `server.py` accordingly.
 
 ## Browser Reuse & Crash Recovery
 

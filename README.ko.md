@@ -1,8 +1,8 @@
-# Crawl4ai Local for Windows
+# Crawl4ai Local
 
 [English](./README.md) | [한국어](./README.ko.md)
 
-Windows용 Crawl4ai 로컬 MCP 서버. WSL 환경 없이 Windows에서 바로 실행 가능한 버전입니다.
+Linux용 Crawl4ai 로컬 MCP 서버.
 
 🤖 대부분의 코드가 AI를 통해 생성되었습니다.
 
@@ -14,12 +14,22 @@ Windows용 Crawl4ai 로컬 MCP 서버. WSL 환경 없이 Windows에서 바로 �
 ## 요구 사항
 
 - [uv](https://docs.astral.sh/uv/)
-- Python 3.14 (uv로 설치한 Python은 Windows 스마트 앱 컨트롤에 의해 차단될 수 있으니 별도로 설치할 것)
+- Linux
+- Python 3.14 (uv로 설치해도 됨: `uv python install 3.14`)
 
 ## 설치
 
 ```
 uv sync
+
+# Playwright용 Chromium 설치
+uv run crawl4ai-setup
+```
+
+Chromium 실행에 필요한 시스템 라이브러리가 없어 브라우저 기동이 실패하면 아래 명령으로 설치하세요 (sudo 필요, Debian/Ubuntu 등 apt 기반 배포판 전용).
+
+```
+uv run playwright install-deps chromium
 ```
 
 ## 실행
@@ -35,7 +45,7 @@ uv run main
 
 ```
 # 참고: 디버깅 모드(MCP Inspector)
-uv run mcp dev src/crawl4ai_local_for_windows/server.py
+uv run mcp dev src/crawl4ai_local/server.py
 ```
 
 ## 에이전트에 MCP 추가하기
@@ -43,11 +53,11 @@ uv run mcp dev src/crawl4ai_local_for_windows/server.py
 ### Claude Code
 
 ```
-claude mcp add --transport stdio --scope user crawl4ai -- uv run --directory <parent_location>/crawl4ai-local-for-windows main
+claude mcp add --transport stdio --scope user crawl4ai -- uv run --directory <parent_location>/crawl4ai-local main
 ```
 
-- `parent_location`: `C:/dev/repo` 형태로 작성
-- 예: `claude mcp add --transport stdio --scope user crawl4ai -- uv run --directory C:/dev/repo/crawl4ai-local-for-windows main`
+- `parent_location`: `/home/<user>/dev/repo` 형태의 절대경로로 작성 (`~`는 셸이 펼쳐주는 경우에만 사용)
+- 예: `claude mcp add --transport stdio --scope user crawl4ai -- uv run --directory /home/me/dev/repo/crawl4ai-local main`
 
 ```
 # MCP 설치 확인
@@ -58,11 +68,11 @@ claude mcp get crawl4ai
 ### Hermes Agent
 
 ```
-hermes mcp add crawl4ai --command "uv" --args "run" "--directory" "<parent_location>/crawl4ai-local-for-windows" "main"
+hermes mcp add crawl4ai --command "uv" --args "run" "--directory" "<parent_location>/crawl4ai-local" "main"
 ```
 
-- `parent_location`: `C:/dev/repo` 형태로 작성
-- 예: `C:/dev/repo/crawl4ai-local-for-windows`
+- `parent_location`: `/home/<user>/dev/repo` 형태의 절대경로로 작성 (`~`는 셸이 펼쳐주는 경우에만 사용)
+- 예: `/home/me/dev/repo/crawl4ai-local`
 
 ```
 # MCP 설치 확인
@@ -103,7 +113,14 @@ crawl_structured(
 
 전체 페이지 스크린샷을 캡처해 파일로 저장합니다. 상위 디렉토리는 자동 생성됩니다.
 
-🛡️ **`output_path`는 크롤링을 실행하기 전에 알려진 Windows 시스템 디렉토리 차단 목록**(`C:\Windows`, `C:\Program Files`, `C:\Program Files (x86)`, `C:\ProgramData`, `C:\System Volume Information`, `C:\$Recycle.Bin`, `C:\Users\All Users`, `C:\Users\Default`)과 대조 검사됩니다. `..` 등을 이용한 우회 경로를 포함해 경로가 이 목록 하위로 해석되면 크롤링 없이 즉시 오류 메시지와 함께 거부되어, 에이전트가 실수로 시스템 파일을 덮어쓰는 것을 막습니다. 화이트리스트 방식의 완전한 샌드박싱이 아니라, 실수 방지 수준의 블랙리스트 가드레일입니다.
+💡 `output_path`에 Windows 경로(`C:\Users\me\shot.png`, `D:/shots/a.png`)를 넘기면 마운트된 드라이브 경로(`/mnt/c/Users/me/shot.png`)로 변환해 저장합니다.
+
+🛡️ **`output_path`는 크롤링을 실행하기 전에 알려진 시스템 디렉토리 차단 목록과 대조 검사됩니다.**
+
+- Linux: `/bin`, `/boot`, `/dev`, `/etc`, `/lib`, `/lib32`, `/lib64`, `/libx32`, `/proc`, `/run`, `/sbin`, `/snap`, `/sys`, `/usr`, `/var`
+- Windows (`/mnt/<드라이브>/` 아래, 대소문자 무시): `Windows`, `Program Files`, `Program Files (x86)`, `ProgramData`, `System Volume Information`, `$Recycle.Bin`, `Users/All Users`, `Users/Default`
+
+`..` 등을 이용한 우회 경로나 심볼릭 링크를 거친 경로를 포함해 경로가 이 목록 하위로 해석되면 크롤링 없이 즉시 오류 메시지와 함께 거부되어, 에이전트가 실수로 시스템 파일을 덮어쓰는 것을 막습니다. 화이트리스트 방식의 완전한 샌드박싱이 아니라, 실수 방지 수준의 블랙리스트 가드레일입니다. Windows 드라이브가 `/mnt/`가 아닌 다른 경로에 마운트되어 있다면 `server.py`의 `_DRIVE_MOUNT_ROOT`도 맞춰 수정하세요.
 
 ## 브라우저 재사용 & 크래시 복구
 

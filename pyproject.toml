@@ -9,12 +9,17 @@ authors = [
 requires-python = ">=3.14"
 dependencies = [
     "crawl4ai>=0.9.4",
-    "mcp>=2.2.0",
+    "mcp[cli]>=2.2.0",
 ]
 
 [project.scripts]
-crawl4ai-local = "crawl4ai_local:main"
+main = "crawl4ai_local.server:main"
 
 [build-system]
 requires = ["uv_build>=0.12.17,<0.13.0"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]

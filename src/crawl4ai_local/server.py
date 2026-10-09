@@ -4,10 +4,18 @@ import binascii
 import logging
 import os
 import re
+from pathlib import Path
+from typing import TypedDict, Unpack
 
+from crawl4ai import (
+    AsyncWebCrawler,
+    BrowserConfig,
+    CacheMode,
+    CrawlerRunConfig,
+    CrawlResult,
+)
+from crawl4ai.extraction_strategy import ExtractionStrategy, JsonCssExtractionStrategy
 from mcp.server import MCPServer
-from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
-from crawl4ai.extraction_strategy import JsonCssExtractionStrategy
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("crawl4ai-mcp")
@@ -148,7 +156,7 @@ async def reset_crawler() -> None:
             logger.exception("크롤러 종료 중 예외 (무시하고 재생성)")
 
 
-async def run_with_recovery(url: str, config: CrawlerRunConfig):
+async def run_with_recovery(url: str, config: CrawlerRunConfig) -> CrawlResult:
     """arun을 실행하고, 브라우저 자체 붕괴로 보이면 재생성 후 재시도한다.
 
     예외로 튀는 경우와 result.success=False로 조용히 돌아오는 경우를
@@ -161,30 +169,26 @@ async def run_with_recovery(url: str, config: CrawlerRunConfig):
     것은 직전 루프에서 끝났으므로, 여기서 한 번 더 리셋하면 그 사이 다른
     요청이 새로 만든 정상 인스턴스를 괜히 파괴할 수 있다.
     """
-    last_result = None
-    last_exc: Exception | None = None
-
-    for attempt in range(1, _MAX_RECREATE_ATTEMPTS + 1):
+    attempt = 1
+    while True:
         crawler = await get_crawler()
         is_last_attempt = attempt == _MAX_RECREATE_ATTEMPTS
 
         try:
-            result = await crawler.arun(url=url, config=config)
+            # arun은 결과를 __getattr__로 위임하는 컨테이너를 돌려줘서 속성이 전부
+            # Any가 된다. 단일 URL 호출이면 첫 원소가 실제 CrawlResult다.
+            result: CrawlResult = (await crawler.arun(url=url, config=config))[0]
         except Exception as exc:
             logger.exception(
                 "arun 예외 (시도 %d/%d): %s", attempt, _MAX_RECREATE_ATTEMPTS, url
             )
-            if not _looks_like_browser_crash(exc):
+            if not _looks_like_browser_crash(exc) or is_last_attempt:
                 raise
-            last_exc = exc
-            last_result = None
-            if not is_last_attempt:
-                await reset_crawler()
-            continue
-
-        if not result.success and _looks_like_browser_crash_message(
-            result.error_message or ""
-        ):
+        else:
+            if result.success or not _looks_like_browser_crash_message(
+                result.error_message or ""
+            ):
+                return result
             logger.warning(
                 "브라우저 붕괴 의심 (시도 %d/%d, %s): %s",
                 attempt,
@@ -192,17 +196,11 @@ async def run_with_recovery(url: str, config: CrawlerRunConfig):
                 url,
                 result.error_message,
             )
-            last_result = result
-            last_exc = None
-            if not is_last_attempt:
-                await reset_crawler()
-            continue
+            if is_last_attempt:
+                return result  # 재시도 소진 — 마지막 실패 결과를 그대로 반환해 호출부가 처리
 
-        return result
-
-    if last_exc is not None:
-        raise last_exc
-    return last_result  # 재시도 소진 — 마지막 실패 결과를 그대로 반환해 호출부가 처리
+        await reset_crawler()
+        attempt += 1
 
 
 def _looks_like_browser_crash(exc: Exception) -> bool:
@@ -234,8 +232,17 @@ async def shutdown_crawler() -> None:
     await reset_crawler()
 
 
-def _build_config(wait_seconds: float, wait_selector: str, **extra) -> CrawlerRunConfig:
-    kwargs: dict = {"cache_mode": CacheMode.BYPASS, **extra}
+class _RunConfigKwargs(TypedDict, total=False):
+    cache_mode: CacheMode
+    wait_for: str
+    delay_before_return_html: float
+    extraction_strategy: ExtractionStrategy
+
+
+def _build_config(
+    wait_seconds: float, wait_selector: str, **extra: Unpack[_RunConfigKwargs]
+) -> CrawlerRunConfig:
+    kwargs: _RunConfigKwargs = {"cache_mode": CacheMode.BYPASS, **extra}
     if wait_selector:
         kwargs["wait_for"] = f"css:{wait_selector}"
     elif wait_seconds > 0:
@@ -243,7 +250,7 @@ def _build_config(wait_seconds: float, wait_selector: str, **extra) -> CrawlerRu
     return CrawlerRunConfig(**kwargs)
 
 
-def _parse_field_spec(spec: str) -> dict:
+def _parse_field_spec(spec: str) -> dict[str, str]:
     """필드 스펙 문자열을 JsonCssExtractionStrategy용 필드 딕셔너리로 변환한다.
 
     - "a@href" -> 속성 추출 (요소@속성명)
@@ -293,7 +300,12 @@ async def crawl_markdown(
     if not result.success:
         return f"크롤링 실패: {result.error_message}"
 
-    return result.markdown
+    # markdown 프로퍼티는 타입 주석이 없고, 마크다운 생성 결과가 없으면 None을 돌려준다.
+    markdown: str | None = result.markdown
+    if markdown is None:
+        return "마크다운 결과 없음 — 크롤링은 성공했지만 마크다운이 생성되지 않음"
+
+    return markdown
 
 
 @mcp.tool()
@@ -389,8 +401,7 @@ async def crawl_screenshot(url: str, output_path: str) -> str:
         os.makedirs(output_dir, exist_ok=True)
 
     try:
-        with open(output_path, "wb") as f:
-            f.write(image_bytes)
+        await asyncio.to_thread(Path(output_path).write_bytes, image_bytes)
     except OSError as exc:
         logger.exception("스크린샷 저장 실패: %s", output_path)
         return f"파일 저장 실패: {exc}"

@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "anti-slop-py": {
+      "source": {
+        "source": "github",
+        "repo": "infoslack/anti-slop-py"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "anti-slop-py@anti-slop-py": true
+  }
+}

@@ -93,7 +93,7 @@ CSS 셀렉터로 반복 요소를 추출해 JSON으로 반환합니다.
 crawl_structured(
     url="https://books.toscrape.com/",
     selector="article.product_pod",
-    fields={"제목": "h3@title", "가격": ".price_color:text"},
+    fields={"제목": "h3 a@title", "가격": ".price_color:text"},
 )
 # -> [{"제목": "A Light in the Attic", "가격": "£51.77"}, ...]
 ```
@@ -160,3 +160,27 @@ crawl_markdown(url="https://example.com", wait_selector="div.result-list")
 
 1. `wait_selector`는 "새로 생기는 요소"에만 유효합니다. 초기 HTML에 이미 있는 요소(예: `<article id="dynamic">Loading...</article>`)의 텍스트가 나중에 바뀌는 경우, 셀렉터가 즉시 매칭되어 아무 대기 없이 통과합니다. 텍스트 갱신형 페이지는 `wait_seconds`를 사용하세요.
 2. 극단적인 페이지는 안티봇 휴리스틱에 걸립니다. 내용이 거의 없고 스크립트 태그만 많은 페이지는 Crawl4ai의 안티봇 감지기에 의해 `Blocked by anti-bot protection: Structural: no_content_elements, script_heavy_shell`로 `success=False` 처리됩니다. 실제 서비스 페이지에서는 드물지만, 테스트는 기본적인 정적 콘텐츠(내비게이션 바, 문단 등)를 포함한 페이지에서 진행하는 것이 좋습니다.
+
+## 공식 저장소 변경 따라가기
+
+이 서버는 [공식 crawl4ai](https://github.com/unclecode/crawl4ai) 라이브러리에 의존하므로, upstream 릴리스에 따라 소스 수정이 필요할 수 있습니다. 이를 처리하는 Claude Code 슬래시 커맨드가 함께 들어 있습니다: `.claude/commands/sync-upstream.md`.
+
+이 저장소 루트에서 Claude Code로 실행하세요.
+
+```
+# 최신 정식 릴리스로 동기화
+/sync-upstream
+
+# 특정 버전으로 동기화 (pre-release는 버전을 명시했을 때만 대상)
+/sync-upstream 0.9.5
+```
+
+진행 순서:
+
+1. 설치된 `crawl4ai` 버전을 GitHub 최신 릴리스와 비교하고, 이미 최신이면 그대로 끝냅니다.
+2. 현재 버전 이후의 릴리스 노트와 `CHANGELOG.md`를 읽고, `src/`에서 쓰는 crawl4ai API에 영향이 있는 변경만 골라냅니다.
+3. `uv add`로 `crawl4ai>=` 하한을 올리고, 브라우저 버전이 바뀌었으면 `uv run crawl4ai-setup`을 실행합니다.
+4. MCP 도구의 이름, 인자, 반환 형식은 유지한 채 `server.py`를 수정합니다 (도구 사용 방식이 바뀌면 두 README도 함께 수정). 도구 형식을 바꿀 수밖에 없으면 먼저 묻습니다.
+5. Ruff, Flake8, mypy, pytest와 세 도구의 실제 크롤링 스모크 테스트를 실행하고 결과를 보고합니다.
+
+커밋은 하지 않습니다. diff를 검토한 뒤 직접 커밋하세요.

@@ -93,7 +93,7 @@ Extract repeated elements as JSON using CSS selectors.
 crawl_structured(
     url="https://books.toscrape.com/",
     selector="article.product_pod",
-    fields={"제목": "h3@title", "가격": ".price_color:text"},
+    fields={"제목": "h3 a@title", "가격": ".price_color:text"},
 )
 # → [{"제목": "A Light in the Attic", "가격": "£51.77"}, ...]
 ```
@@ -160,3 +160,27 @@ Comparison of 3 cases on a local test page that updates content via JS after 3 s
 
 1. **`wait_selector` is only valid for "newly created elements."** If the text of an element already present in the initial HTML (e.g., `<article id="dynamic">Loading...</article>`) changes later, the selector matches immediately and passes without waiting. For pages that update text dynamically, use `wait_seconds`.
 2. **Extreme pages trigger anti-bot heuristics.** Pages with minimal content and many script tags are flagged by Crawl4ai's anti-bot detector as `Blocked by anti-bot protection: Structural: no_content_elements, script_heavy_shell`, resulting in `success=False`. Although rare in production pages, testing should be done on pages containing basic static content (navigation bars, paragraphs, etc.).
+
+## Keeping Up with Upstream
+
+This server depends on the [official crawl4ai](https://github.com/unclecode/crawl4ai) library, so upstream releases may require source changes. The project ships a Claude Code slash command that handles this: `.claude/commands/sync-upstream.md`.
+
+Run it in Claude Code from this repository's root:
+
+```
+# Sync to the latest stable release
+/sync-upstream
+
+# Sync to a specific version (pre-releases only when named explicitly)
+/sync-upstream 0.9.5
+```
+
+What it does:
+
+1. Compares the installed `crawl4ai` version with the latest GitHub release, and stops if already up to date.
+2. Reads the release notes and `CHANGELOG.md` since the current version, keeping only changes that affect the crawl4ai APIs used in `src/`.
+3. Raises the `crawl4ai>=` lower bound with `uv add`, and runs `uv run crawl4ai-setup` when the browser version changed.
+4. Updates `server.py` (and both READMEs when behavior changes) without changing MCP tool names, arguments, or return formats. If that becomes unavoidable, it asks first.
+5. Runs Ruff, Flake8, mypy, pytest, and a live smoke test of all three tools, then reports the results.
+
+It does not commit. Review the diff and commit yourself.
